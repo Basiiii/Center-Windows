@@ -33,42 +33,43 @@ You can download the precompiled installer from the [Releases](https://github.co
 
 1. **Clone the Repository**:
 
-```sh
-  git clone https://github.com/Basiiii/Center-Windows.git
-  cd Center-Windows
-```
+  ```sh
+    git clone https://github.com/Basiiii/Center-Windows.git
+    cd Center-Windows
+  ```
 
 2. **Create a Virtual Environment** (optional but recommended):
 
-```sh
-  python -m venv venv
-```
+  ```sh
+    python -m venv venv
+  ```
 
 3. **Activate the Virtual Environment**:
 
-```cmd
-  venv\Scripts\activate
-```
+  ```cmd
+    venv\Scripts\activate
+  ```
 
 4. **Install Dependencies**:
 
-   ```sh
-   pip install -r requirements.txt
-   ```
+  ```sh
+  pip install -r requirements.txt
+  ```
+  
 5. **Run the Application**:
 
-   - To run in your terminal:
+- To run in your terminal:
 
-     ```sh
-     python Center-Windows.py
-     ```
-   - To compile and create an executable (allows running in the background without a terminal):
+  ```sh
+  python Center-Windows.py
+  ```
+- To compile and create an executable (allows running in the background without a terminal):
 
-     ```sh
-     python setup.py py2exe
-     ```
+  ```sh
+  python setup.py py2exe
+  ```
 
-     This will create an executable in the `dist` directory.
+  This will create an executable in the `dist` directory.
 
 ## Usage
 
