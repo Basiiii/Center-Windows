@@ -3,7 +3,7 @@
 
 [Setup]
 AppName=Center Windows
-AppVerName=Center Windows 1.0
+AppVerName=Center Windows 1.1
 AppPublisher=Enrique Rodrigues (Basi)
 AppPublisherURL=https://github.com/Basiiii/Center-Windows
 AppSupportURL=https://github.com/Basiiii/Center-Windows
@@ -16,7 +16,7 @@ OutputBaseFilename=Center-Windows-Setup
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "F:\Center-Windows\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "H:\Github\Center-Windows\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Center Windows"; Filename: "{app}\Center-Windows.exe"; Tasks: desktopicon; IconFilename: "{app}\icon.ico"

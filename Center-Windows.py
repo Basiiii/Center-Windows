@@ -89,21 +89,25 @@ def get_window_title_from_hwnd(hwnd):
 
 def center_window(window):
   """
-  Centers a given window on the screen.
-
+  Centers a given window on the screen if it's not maximized.
+  
   Parameters:
   - window: The window object to be centered. This should be an instance of a class that has attributes like `size` and methods like `moveTo`.
-
+  
   This function calculates the new position for the window so that it is centered on the screen,
   taking into account both the screen dimensions and the window's own dimensions.
   """
+  # Check if the window is maximized
+  if window.isMaximized:
+      return  # Do not center the window if it's maximized
+
   # Retrieve the width and height of the window
   window_width, window_height = window.size
-  
+
   # Calculate the new x and y coordinates for the top-left corner of the window
   new_x = (SCREEN_WIDTH - window_width) // 2
   new_y = (SCREEN_HEIGHT - window_height) // 2
-  
+
   # Move the window to the calculated position
   window.moveTo(new_x, new_y)
 
@@ -138,10 +142,10 @@ def monitor_windows():
   while running:
     # Sleep for a short period to reduce CPU usage
     time.sleep(0.05)
-    
+
     # Update the list of current windows
     current_windows = gw.getAllWindows()
-    
+
     # Iterate through the current windows
     for window in current_windows:
       # Check if the window's handle is not in the set of existing HWNDs
@@ -150,11 +154,13 @@ def monitor_windows():
           window_title = get_window_title_from_hwnd(window._hWnd)
           if window_title and window_title not in ignore_list:
             print(window_title)
-            center_window(window)
+            # Only center the window if it's not maximized
+            if not window.isMaximized:
+              center_window(window)
         except Exception as e:
           # Print an error message if an exception occurs
           print(f"Error centering window '{window.title}': {e}")
-        
+
         # Add the new window's handle to the set of existing HWNDs
         existing_hwnds.add(window._hWnd)
 
