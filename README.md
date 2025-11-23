@@ -4,7 +4,7 @@
 
 Feel free to donate to me [here](https://www.paypal.com/paypalme/basigraphics):
 
-``https://www.paypal.com/paypalme/basigraphics``
+`https://www.paypal.com/paypalme/basigraphics`
 
 ## Features
 
@@ -21,10 +21,12 @@ You can download the precompiled installer from the [Releases](https://github.co
 
    - Navigate to the [Releases](https://github.com/Basiiii/Center-Windows/releases) page.
    - Download the latest `Center-Windows-Setup.exe` installer.
+
 2. **Install the Application**:
 
    - Double-click on the installer file (`Center-Windows-Setup.exe`).
    - Follow the on-screen instructions to complete the installation.
+
 3. **Run the Application**:
 
    - Once installed, you can run the application from the Start menu or desktop shortcut.
@@ -33,29 +35,29 @@ You can download the precompiled installer from the [Releases](https://github.co
 
 1. **Clone the Repository**:
 
-  ```sh
-    git clone https://github.com/Basiiii/Center-Windows.git
-    cd Center-Windows
-  ```
+```sh
+  git clone https://github.com/Basiiii/Center-Windows.git
+  cd Center-Windows
+```
 
 2. **Create a Virtual Environment** (optional but recommended):
 
-  ```sh
-    python -m venv venv
-  ```
+```sh
+  python -m venv venv
+```
 
 3. **Activate the Virtual Environment**:
 
-  ```cmd
-    venv\Scripts\activate
-  ```
+```cmd
+  venv\Scripts\activate
+```
 
 4. **Install Dependencies**:
 
-  ```sh
-  pip install -r requirements.txt
-  ```
-  
+```sh
+pip install -r requirements.txt
+```
+
 5. **Run the Application**:
 
 - To run in your terminal:
@@ -63,13 +65,22 @@ You can download the precompiled installer from the [Releases](https://github.co
   ```sh
   python Center-Windows.py
   ```
-- To compile and create an executable (allows running in the background without a terminal):
 
-  ```sh
-  python setup.py py2exe
-  ```
+6. **Build a Standalone Executable (PyInstaller)**:
 
-  This will create an executable in the `dist` directory.
+First install PyInstaller in your virtual environment (if not already installed):
+
+```sh
+pip install pyinstaller
+```
+
+Then build the executable:
+
+```sh
+pyinstaller --noconfirm --noconsole --icon=icon.ico --name "Center-Windows" Center-Windows.py
+```
+
+This will create an executable at `dist/Center-Windows/Center-Windows.exe`.
 
 ## Usage
 

@@ -1,12 +1,13 @@
 import ctypes
 import time
 import webbrowser
-import psutil
 import pygetwindow as gw
 import pyautogui
 import threading
 import os
 import json
+import pkg_resources  # Ensures pkg_resources is bundled for infi.systray when frozen
+from ctypes import wintypes
 from infi.systray import SysTrayIcon
 
 # Constants
@@ -16,7 +17,8 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "center_windows_config.jso
 # Global Variables
 running = True  # Controls the main loop execution
 quit_event = threading.Event()  # Signals application exit
-ignore_list = [ # List of window titles to ignore
+
+DEFAULT_IGNORE_TITLES = [  # Built-in window titles to ignore
     "Task Switching",
     "PopupHost",
     "Start",
@@ -28,8 +30,10 @@ ignore_list = [ # List of window titles to ignore
     "LockApp",
     "Windows Shell Experience Host",
     "On-Screen Keyboard",
-    "System tray overflow window."
+    "System tray overflow window.",
 ]
+
+ignore_list = list(DEFAULT_IGNORE_TITLES)
 
 hover_text = "Center-Windows"  # Text displayed when hovering over the system tray icon
 
@@ -37,26 +41,72 @@ respect_taskbar = True
 
 
 def load_config():
-  global respect_taskbar
+  global respect_taskbar, ignore_list
   try:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
       data = json.load(f)
+
     value = data.get("respect_taskbar")
     if isinstance(value, bool):
       respect_taskbar = value
+
+    extra_titles = data.get("extra_ignore_titles")
+    if isinstance(extra_titles, list):
+      for title in extra_titles:
+        if isinstance(title, str) and title not in ignore_list:
+          ignore_list.append(title)
   except Exception:
     pass
 
 
 def save_config():
   try:
+    data = {}
+    try:
+      with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f) or {}
+    except Exception:
+      data = {}
+
+    data["respect_taskbar"] = respect_taskbar
+
+    extra_titles = [
+      title for title in ignore_list
+      if title not in DEFAULT_IGNORE_TITLES
+    ]
+    data["extra_ignore_titles"] = extra_titles
+
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-      json.dump({"respect_taskbar": respect_taskbar}, f)
+      json.dump(data, f, indent=2)
   except Exception:
     pass
 
 user32 = ctypes.windll.user32
 MONITOR_DEFAULTTONEAREST = 2
+
+EVENT_OBJECT_SHOW = 0x8002
+WINEVENT_OUTOFCONTEXT = 0x0000
+OBJID_WINDOW = 0
+
+WinEventProcType = ctypes.WINFUNCTYPE(
+  None,
+  ctypes.c_void_p,
+  ctypes.c_uint,
+  ctypes.c_void_p,
+  ctypes.c_long,
+  ctypes.c_long,
+  ctypes.c_uint,
+  ctypes.c_uint,
+)
+
+win_event_proc = None
+
+user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT]
+user32.GetMessageW.restype = ctypes.c_int
+user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
+user32.TranslateMessage.restype = ctypes.c_bool
+user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+user32.DispatchMessageW.restype = ctypes.c_long
 
 
 class RECT(ctypes.Structure):
@@ -98,36 +148,52 @@ def get_monitor_work_area(hwnd):
   height = area.bottom - area.top
   return left, top, width, height
 
-def get_process_name_from_hwnd(hwnd):
-  """
-  Retrieves the name of the process associated with a given window handle (HWND).
 
-  Parameters:
-  hwnd (int): The window handle (HWND) for which to retrieve the process name.
-
-  Returns:
-  str: The name of the process associated with the given HWND. 
-        Returns "Unknown Process" if the process cannot be found or accessed,
-        and "Access Denied" if access to the process information is denied.
-
-  Raises:
-  Exception: Any other exception encountered during the retrieval process will be caught,
-              logged, and result in returning "Unknown Process".
-  """
+def handle_win_event(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
+  global existing_hwnds
+  if not hwnd:
+    return
+  if idObject != OBJID_WINDOW:
+    return
   try:
-    process_id = ctypes.c_ulong()
-    pid = process_id.value
-    p = psutil.Process(pid)
-    
-    process_name = p.name()
-    return process_name
-  except psutil.NoSuchProcess:
-    return "Unknown Process"
-  except psutil.AccessDenied:
-    return "Access Denied"
+    hwnd_int = ctypes.c_void_p(hwnd).value
+    if hwnd_int in existing_hwnds:
+      return
+    window_title = get_window_title_from_hwnd(hwnd_int)
+    if not window_title or window_title in ignore_list:
+      existing_hwnds.add(hwnd_int)
+      return
+    print(window_title)
+    target_window = None
+    for w in gw.getAllWindows():
+      if w._hWnd == hwnd_int:
+        target_window = w
+        break
+    if target_window is None:
+      existing_hwnds.add(hwnd_int)
+      return
+    if not target_window.isMaximized:
+      center_window(target_window)
+    existing_hwnds.add(hwnd_int)
   except Exception as e:
-    # print(f"Error getting process name for HWND {hwnd}: {e}")
-    return "Unknown Process"
+    try:
+      print(f"Error centering window from event: {e}")
+    except Exception:
+      pass
+
+
+def window_event_loop():
+  global win_event_proc
+  WinEventProc = WinEventProcType(handle_win_event)
+  win_event_proc = WinEventProc
+  hook = user32.SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, 0, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT)
+  if not hook:
+    return
+  msg = wintypes.MSG()
+  while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) != 0:
+    user32.TranslateMessage(ctypes.byref(msg))
+    user32.DispatchMessageW(ctypes.byref(msg))
+
 
 def get_window_title_from_hwnd(hwnd):
   """
@@ -168,8 +234,6 @@ def center_window(window):
   # Check if the window is maximized
   if window.isMaximized:
       return  # Do not center the window if it's maximized
-
-  time.sleep(0.1)
 
   window_width = 0
   window_height = 0
@@ -221,40 +285,6 @@ def on_quit_callback(sysTrayIcon):
   global running
   running = False  # Stop the loop
   quit_event.set()  # Signal the main thread to exit
-
-def monitor_windows():
-  """
-  Main loop for monitoring and adjusting window positions based on certain criteria.
-
-  This function continuously checks for new windows, centers them if they meet the criteria,
-  and adds their handles to a set of known windows to avoid reprocessing.
-  """
-  global running
-
-  while running:
-    # Sleep for a short period to reduce CPU usage
-    time.sleep(0.05)
-
-    # Update the list of current windows
-    current_windows = gw.getAllWindows()
-
-    # Iterate through the current windows
-    for window in current_windows:
-      # Check if the window's handle is not in the set of existing HWNDs
-      if window._hWnd not in existing_hwnds:
-        try:
-          window_title = get_window_title_from_hwnd(window._hWnd)
-          if window_title and window_title not in ignore_list:
-            print(window_title)
-            # Only center the window if it's not maximized
-            if not window.isMaximized:
-              center_window(window)
-        except Exception as e:
-          # Print an error message if an exception occurs
-          print(f"Error centering window '{window.title}': {e}")
-
-        # Add the new window's handle to the set of existing HWNDs
-        existing_hwnds.add(window._hWnd)
 
 def open_github(sysTrayIcon=None):
     """
@@ -319,8 +349,8 @@ def initialize_sys_tray_and_monitoring():
                   ('Donate', None, open_donation))
   sysTrayIcon = SysTrayIcon("icon.ico", current_hover, menu_options=menu_options, on_quit=on_quit_callback, default_menu_index=1)
   
-  # Start the window monitoring loop in a separate thread
-  loop_thread = threading.Thread(target=monitor_windows)
+  # Start the event-driven window monitoring loop in a separate thread
+  loop_thread = threading.Thread(target=window_event_loop)
   loop_thread.daemon = True
   loop_thread.start()
   

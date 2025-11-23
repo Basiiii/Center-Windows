@@ -16,7 +16,7 @@ OutputBaseFilename=Center-Windows-Setup
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "H:\Github\Center-Windows\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\Repositories\Center-Windows\dist\Center-Windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Center Windows"; Filename: "{app}\Center-Windows.exe"; Tasks: desktopicon; IconFilename: "{app}\icon.ico"

@@ -8,6 +8,8 @@ setup(windows=[{
   options={
     "py2exe": {
         "optimize": 2,
+        "packages": ["infi", "infi.systray"],
+        "includes": ["infi.systray"],
     }
   },
   data_files=[('.', ['icon.ico'])]
