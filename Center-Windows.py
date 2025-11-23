@@ -5,10 +5,13 @@ import psutil
 import pygetwindow as gw
 import pyautogui
 import threading
+import os
+import json
 from infi.systray import SysTrayIcon
 
 # Constants
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()  # Screen dimensions
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "center_windows_config.json")
 
 # Global Variables
 running = True  # Controls the main loop execution
@@ -29,6 +32,71 @@ ignore_list = [ # List of window titles to ignore
 ]
 
 hover_text = "Center-Windows"  # Text displayed when hovering over the system tray icon
+
+respect_taskbar = True
+
+
+def load_config():
+  global respect_taskbar
+  try:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+      data = json.load(f)
+    value = data.get("respect_taskbar")
+    if isinstance(value, bool):
+      respect_taskbar = value
+  except Exception:
+    pass
+
+
+def save_config():
+  try:
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+      json.dump({"respect_taskbar": respect_taskbar}, f)
+  except Exception:
+    pass
+
+user32 = ctypes.windll.user32
+MONITOR_DEFAULTTONEAREST = 2
+
+
+class RECT(ctypes.Structure):
+  _fields_ = [
+    ("left", ctypes.c_long),
+    ("top", ctypes.c_long),
+    ("right", ctypes.c_long),
+    ("bottom", ctypes.c_long),
+  ]
+
+
+class MONITORINFO(ctypes.Structure):
+  _fields_ = [
+    ("cbSize", ctypes.c_ulong),
+    ("rcMonitor", RECT),
+    ("rcWork", RECT),
+    ("dwFlags", ctypes.c_ulong),
+  ]
+
+
+def get_monitor_work_area(hwnd):
+  monitor = user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)
+  if not monitor:
+    return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+
+  mi = MONITORINFO()
+  mi.cbSize = ctypes.sizeof(MONITORINFO)
+  if not user32.GetMonitorInfoW(monitor, ctypes.byref(mi)):
+    return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+
+  if respect_taskbar:
+    area = mi.rcWork
+  else:
+    area = mi.rcMonitor
+
+  left = area.left
+  top = area.top
+  width = area.right - area.left
+  height = area.bottom - area.top
+  return left, top, width, height
 
 def get_process_name_from_hwnd(hwnd):
   """
@@ -101,12 +169,36 @@ def center_window(window):
   if window.isMaximized:
       return  # Do not center the window if it's maximized
 
-  # Retrieve the width and height of the window
-  window_width, window_height = window.size
+  time.sleep(0.1)
+
+  window_width = 0
+  window_height = 0
+  start_time = time.time()
+
+  while time.time() - start_time < 0.5:
+      try:
+          for w in gw.getAllWindows():
+              if w._hWnd == window._hWnd:
+                  window = w
+                  break
+          window_width, window_height = window.size
+          if window_width > 0 and window_height > 0:
+              break
+      except Exception:
+          break
+      time.sleep(0.05)
+
+  if window_width <= 0 or window_height <= 0:
+      return
+
+  if window.isMaximized:
+      return
+
+  monitor_left, monitor_top, monitor_width, monitor_height = get_monitor_work_area(window._hWnd)
 
   # Calculate the new x and y coordinates for the top-left corner of the window
-  new_x = (SCREEN_WIDTH - window_width) // 2
-  new_y = (SCREEN_HEIGHT - window_height) // 2
+  new_x = monitor_left + (monitor_width - window_width) // 2
+  new_y = monitor_top + (monitor_height - window_height) // 2
 
   # Move the window to the calculated position
   window.moveTo(new_x, new_y)
@@ -176,6 +268,28 @@ def open_donation(sysTrayIcon=None):
     """
     webbrowser.open("https://www.paypal.com/paypalme/basigraphics")
 
+def enable_respect_taskbar(sysTrayIcon=None):
+  global respect_taskbar
+  respect_taskbar = True
+  save_config()
+  if sysTrayIcon is not None:
+    sysTrayIcon.hover_text = "Center-Windows (work area)"
+    try:
+      sysTrayIcon._refresh_icon()
+    except Exception:
+      pass
+
+def disable_respect_taskbar(sysTrayIcon=None):
+  global respect_taskbar
+  respect_taskbar = False
+  save_config()
+  if sysTrayIcon is not None:
+    sysTrayIcon.hover_text = "Center-Windows (full monitor)"
+    try:
+      sysTrayIcon._refresh_icon()
+    except Exception:
+      pass
+
 def initialize_sys_tray_and_monitoring():
   """
   Initializes the system tray icon and starts the window monitoring loop in a separate thread.
@@ -184,23 +298,43 @@ def initialize_sys_tray_and_monitoring():
   """
   global existing_hwnds, quit_event
   
+  load_config()
+
   # Initialize a set to keep track of existing window handles (HWNDs)
   existing_hwnds = set([w._hWnd for w in gw.getAllWindows()])
   
   # Create and configure the system tray icon
-  menu_options = (('Github Repo', None, open_github),
+  if respect_taskbar:
+    current_hover = "Center-Windows (work area)"
+  else:
+    current_hover = "Center-Windows (full monitor)"
+
+  centering_menu = (
+                    ('Center within work area (respect taskbar)', None, enable_respect_taskbar),
+                    ('Center on full monitor (ignore taskbar)', None, disable_respect_taskbar))
+
+  menu_options = (
+                  ('Centering mode', None, centering_menu),
+                  ('Github Repo', None, open_github),
                   ('Donate', None, open_donation))
-  sysTrayIcon = SysTrayIcon("icon.ico", hover_text, menu_options=menu_options, on_quit=on_quit_callback, default_menu_index=1)
+  sysTrayIcon = SysTrayIcon("icon.ico", current_hover, menu_options=menu_options, on_quit=on_quit_callback, default_menu_index=1)
   
   # Start the window monitoring loop in a separate thread
   loop_thread = threading.Thread(target=monitor_windows)
+  loop_thread.daemon = True
   loop_thread.start()
   
   # Start the system tray icon
-  sysTrayIcon.start()
+  tray_thread = threading.Thread(target=sysTrayIcon.start)
+  tray_thread.daemon = True
+  tray_thread.start()
   
-  # Wait for the quit event to be set, indicating the application should exit
-  quit_event.wait()
 
-# Call the function to start the application
-initialize_sys_tray_and_monitoring()
+if __name__ == "__main__":
+  try:
+    initialize_sys_tray_and_monitoring()
+    while not quit_event.is_set():
+      time.sleep(0.1)
+  except KeyboardInterrupt:
+    running = False
+    quit_event.set()
