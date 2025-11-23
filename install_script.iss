@@ -3,7 +3,7 @@
 
 [Setup]
 AppName=Center Windows
-AppVerName=Center Windows 1.1
+AppVerName=Center Windows 1.2
 AppPublisher=Enrique Rodrigues (Basi)
 AppPublisherURL=https://github.com/Basiiii/Center-Windows
 AppSupportURL=https://github.com/Basiiii/Center-Windows
